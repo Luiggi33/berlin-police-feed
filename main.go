@@ -83,6 +83,10 @@ func main() {
 		Created:     time.Now(),
 	}
 
+	feedRSS, _ := feed.ToRss()
+	feedJSON, _ := feed.ToJSON()
+	feedAtom, _ := feed.ToAtom()
+
 	var oldEvents []Event
 	db.Find(&oldEvents)
 
@@ -91,25 +95,21 @@ func main() {
 		feed.Add(translatedEvent)
 	}
 
-	c := colly.NewCollector(
+	mainCollector := colly.NewCollector(
 		colly.AllowedDomains("www.berlin.de"),
 	)
 
-	c.OnRequest(func(r *colly.Request) {
+	mainCollector.OnRequest(func(r *colly.Request) {
 		log.Println("Visiting:", r.URL)
 	})
 
-	c.OnError(func(_ *colly.Response, err error) {
+	mainCollector.OnError(func(_ *colly.Response, err error) {
 		log.Println("Something went wrong:", err)
-	})
-
-	c.OnResponse(func(r *colly.Response) {
-		log.Println("Page visited:", r.Request.URL)
 	})
 
 	var events []Event
 
-	c.OnHTML("ul.list--tablelist > li", func(e *colly.HTMLElement) {
+	mainCollector.OnHTML("ul.list--tablelist > li", func(e *colly.HTMLElement) {
 		event := Event{}
 
 		t, err := time.Parse("02.01.2006 15:04 Uhr", e.ChildText("div.cell.nowrap.date"))
@@ -130,8 +130,11 @@ func main() {
 		events = append(events, event)
 	})
 
-	c.OnScraped(func(r *colly.Response) {
-		log.Println(r.Request.URL, "scraped!")
+	mainCollector.OnScraped(func(r *colly.Response) {
+		log.Printf("%s scraped, collected %d events!", r.Request.URL, len(events))
+
+		cacheNeedsUpdate := false
+		newEvents := 0
 
 		for _, event := range events {
 			exists, _ := checkDuplicate(&event, db)
@@ -141,11 +144,23 @@ func main() {
 			db.Create(&event)
 			translatedEvent, _ := translateEventToItem(&event)
 			feed.Add(translatedEvent)
+			newEvents++
+			if !cacheNeedsUpdate {
+				cacheNeedsUpdate = true
+			}
 		}
+
+		if cacheNeedsUpdate {
+			feedRSS, _ = feed.ToRss()
+			feedJSON, _ = feed.ToJSON()
+			feedAtom, _ = feed.ToAtom()
+		}
+
+		log.Printf("Added %d new events", newEvents)
 	})
 
 	// TODO maybe initially scrape all the pages
-	err = c.Visit("https://www.berlin.de/polizei/polizeimeldungen/")
+	err = mainCollector.Visit("https://www.berlin.de/polizei/polizeimeldungen/")
 	if err != nil {
 		log.Fatal(err)
 		return
@@ -157,7 +172,7 @@ func main() {
 		for {
 			select {
 			case <-ticker.C:
-				err = c.Visit("https://www.berlin.de/polizei/polizeimeldungen/")
+				err = mainCollector.Visit("https://www.berlin.de/polizei/polizeimeldungen/")
 				if err != nil {
 					log.Fatal(err)
 					return
@@ -170,31 +185,19 @@ func main() {
 	}()
 
 	http.HandleFunc("/atom", func(w http.ResponseWriter, r *http.Request) {
-		atom, err := feed.ToAtom()
-		if err != nil {
-			io.WriteString(w, err.Error())
-			log.Fatal(err)
-		}
 		w.Header().Set("Content-Type", "application/atom+xml")
-		io.WriteString(w, atom)
+		io.WriteString(w, feedAtom)
 	})
 	http.HandleFunc("/rss", func(w http.ResponseWriter, r *http.Request) {
-		rss, err := feed.ToRss()
-		if err != nil {
-			io.WriteString(w, err.Error())
-			log.Fatal(err)
-		}
 		w.Header().Set("Content-Type", "application/atom+xml")
-		io.WriteString(w, rss)
+		io.WriteString(w, feedRSS)
 	})
 	http.HandleFunc("/json", func(w http.ResponseWriter, r *http.Request) {
-		json, err := feed.ToJSON()
-		if err != nil {
-			io.WriteString(w, err.Error())
-			log.Fatal(err)
-		}
 		w.Header().Set("Content-Type", "application/json")
-		io.WriteString(w, json)
+		io.WriteString(w, feedJSON)
+	})
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/rss", http.StatusSeeOther)
 	})
 
 	// TODO make env var for port?
