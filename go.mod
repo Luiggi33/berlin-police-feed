@@ -4,7 +4,6 @@ go 1.23.0
 
 require (
 	github.com/gocolly/colly/v2 v2.1.0
-	github.com/gocolly/colly/v2 v2.1.0
 	github.com/gorilla/feeds v1.2.0
 	gorm.io/driver/sqlite v1.5.7
 	gorm.io/gorm v1.25.12
