@@ -16,9 +16,14 @@ FROM build-stage AS test-stage
 RUN go test -v ./...
 
 # Deploy
-FROM gcr.io/distroless/base-debian12 AS deploy-stage
+FROM debian:bookworm-slim AS deploy-stage
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    && update-ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /
 COPY --from=build-stage /app/entrypoint /entrypoint
+RUN mkdir /data && chown nobody:nogroup /data
 EXPOSE 8080
-USER nonroot:nonroot
+USER nobody:nogroup
 ENTRYPOINT ["/entrypoint"]

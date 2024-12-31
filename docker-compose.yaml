@@ -6,7 +6,7 @@ services:
     ports:
       - "3333:8080"
     volumes:
-      - db-data:/app/db
+      - db-data:/data
     restart: always
 
 volumes:

@@ -59,7 +59,7 @@ func translateEventToItem(event *Event) (*feeds.Item, error) {
 func main() {
 	log.Println("Initializing police scraper...")
 
-	db, err := gorm.Open(sqlite.Open("/app/db/policeEvents.db"), &gorm.Config{
+	db, err := gorm.Open(sqlite.Open("/data/policeEvents.db"), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
 	})
 	if err != nil {
