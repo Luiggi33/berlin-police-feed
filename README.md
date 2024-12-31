@@ -36,8 +36,8 @@ Ein Programm, das Polizeimeldungen von der Website der Berliner Polizei scrapt u
 
 ## TODOs
 
-- [ ] Bereitstellung als Docker Image
-- [ ] GitHub Actions für ^
+- [x] Bereitstellung als Docker Image
+- [x] GitHub Actions für ^
 - [ ] ToDo's aus dem Code angehen
 
 ## Lizenz
