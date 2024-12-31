@@ -83,10 +83,6 @@ func main() {
 		Created:     time.Now(),
 	}
 
-	feedRSS, _ := feed.ToRss()
-	feedJSON, _ := feed.ToJSON()
-	feedAtom, _ := feed.ToAtom()
-
 	var oldEvents []Event
 	db.Find(&oldEvents)
 
@@ -94,6 +90,10 @@ func main() {
 		translatedEvent, _ := translateEventToItem(&event)
 		feed.Add(translatedEvent)
 	}
+
+	feedRSS, _ := feed.ToRss()
+	feedJSON, _ := feed.ToJSON()
+	feedAtom, _ := feed.ToAtom()
 
 	mainCollector := colly.NewCollector(
 		colly.AllowedDomains("www.berlin.de"),
