@@ -3,8 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"github.com/gorilla/feeds"
-	"gorm.io/gorm/logger"
 	"hash/adler32"
 	"io"
 	"log"
@@ -13,7 +11,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gocolly/colly"
+	"github.com/gorilla/feeds"
+	"gorm.io/gorm/logger"
+
+	"github.com/gocolly/colly/v2"
+
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
