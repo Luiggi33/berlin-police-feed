@@ -19,6 +19,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       packages: write
+    concurrency:
+      cancel-in-progress: true
+      group: ${{ github.repository }}-builder
     steps:
       - uses: actions/checkout@v4
 
