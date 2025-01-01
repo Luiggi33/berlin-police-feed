@@ -21,7 +21,7 @@ jobs:
       packages: write
     concurrency:
       cancel-in-progress: true
-      group: ${{ github.repository }}-builder
+      group: ${{ github.repository }}-${{ github.event_name }}-builder
     steps:
       - uses: actions/checkout@v4
 
