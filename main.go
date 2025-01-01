@@ -7,26 +7,35 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gorilla/feeds"
-	"gorm.io/gorm/logger"
+
+	"github.com/PuerkitoBio/goquery"
 
 	"github.com/gocolly/colly/v2"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 type Event struct {
 	gorm.Model
-	Title    string
-	Location string
-	Link     string
-	DateTime int64
-	Hash     string `gorm:"unique"`
+	Title       string
+	Description string
+	Location    string
+	Link        string
+	DateTime    int64
+	Hash        string `gorm:"unique"`
+}
+
+type MetaTag struct {
+	Name    string
+	Content string
 }
 
 func checkDuplicate(event *Event, db *gorm.DB) (bool, error) {
@@ -51,11 +60,39 @@ func translateEventToItem(event *Event) (*feeds.Item, error) {
 	feederItem := feeds.Item{
 		Title:       event.Title,
 		Link:        &feeds.Link{Href: event.Link},
-		Description: "Bezirk: " + event.Location,
+		Description: event.Description + "\n\nBezirk: " + event.Location,
 		Author:      &feeds.Author{Name: "Presseabteilung", Email: "pressestelle@polizei.berlin.de"},
 		Created:     time.Unix(event.DateTime, 0),
 	}
 	return &feederItem, nil
+}
+
+func extractMetaTags(url string) ([]MetaTag, error) {
+	res, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+	if res.StatusCode != 200 {
+		return nil, errors.New(res.Status)
+	}
+	doc, err := goquery.NewDocumentFromReader(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	var metaTags []MetaTag
+	doc.Find("meta").Each(func(i int, s *goquery.Selection) {
+		metaTag := MetaTag{}
+		if name, exists := s.Attr("name"); exists {
+			metaTag.Name = name
+			metaTag.Content = s.AttrOr("content", "")
+		} else if property, exists := s.Attr("property"); exists {
+			metaTag.Name = property
+			metaTag.Content = s.AttrOr("content", "")
+		}
+		metaTags = append(metaTags, metaTag)
+	})
+	return metaTags, nil
 }
 
 func main() {
@@ -68,7 +105,10 @@ func main() {
 		log.Fatal(err)
 	}
 
-	db.AutoMigrate(&Event{})
+	err = db.AutoMigrate(&Event{})
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	err = pruneEvents(db)
 	if err != nil {
@@ -109,6 +149,10 @@ func main() {
 
 	var events []Event
 
+	mainCollector.OnResponse(func(r *colly.Response) {
+		events = nil
+	})
+
 	mainCollector.OnHTML("ul.list--tablelist > li", func(e *colly.HTMLElement) {
 		event := Event{}
 
@@ -122,7 +166,9 @@ func main() {
 		event.Link = "https://www.berlin.de" + e.ChildAttr("a", "href")
 		event.Location = strings.TrimPrefix(e.ChildText("span.category"), "Ereignisort: ")
 
-		// TODO add a description that is scraped from the first idk lines of the link
+		metaTags, _ := extractMetaTags(event.Link)
+		descriptionIdx := slices.IndexFunc(metaTags, func(tag MetaTag) bool { return tag.Name == "description" })
+		event.Description = metaTags[descriptionIdx].Content
 
 		hash := adler32.Checksum([]byte(event.Title + strconv.FormatInt(event.DateTime, 10)))
 		event.Hash = fmt.Sprintf("%x", hash)
@@ -160,7 +206,7 @@ func main() {
 	})
 
 	// TODO maybe initially scrape all the pages
-	err = mainCollector.Visit("https://www.berlin.de/polizei/polizeimeldungen/")
+	err = mainCollector.Visit("https://www.berlin.de/polizei/polizeimeldungen")
 	if err != nil {
 		log.Fatal(err)
 		return
@@ -172,7 +218,7 @@ func main() {
 		for {
 			select {
 			case <-ticker.C:
-				err = mainCollector.Visit("https://www.berlin.de/polizei/polizeimeldungen/")
+				err = mainCollector.Visit("https://www.berlin.de/polizei/polizeimeldungen")
 				if err != nil {
 					log.Fatal(err)
 					return
@@ -186,15 +232,27 @@ func main() {
 
 	http.HandleFunc("/atom", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/atom+xml")
-		io.WriteString(w, feedAtom)
+		_, err := io.WriteString(w, feedAtom)
+		if err != nil {
+			log.Printf("Error writing atom: %v", err)
+			return
+		}
 	})
 	http.HandleFunc("/rss", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/atom+xml")
-		io.WriteString(w, feedRSS)
+		_, err := io.WriteString(w, feedRSS)
+		if err != nil {
+			log.Printf("Error writing rss: %v", err)
+			return
+		}
 	})
 	http.HandleFunc("/json", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		io.WriteString(w, feedJSON)
+		_, err := io.WriteString(w, feedJSON)
+		if err != nil {
+			log.Printf("Error writing json: %v", err)
+			return
+		}
 	})
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/rss", http.StatusSeeOther)
