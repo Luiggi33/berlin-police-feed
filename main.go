@@ -39,14 +39,11 @@ type MetaTag struct {
 }
 
 func checkDuplicate(event *Event, db *gorm.DB, events *[]Event) (bool, error) {
-	var existingEvent Event
-
 	eventIdx := slices.IndexFunc(*events, func(e Event) bool { return e.Hash == event.Hash })
-
 	if eventIdx != -1 {
 		return true, nil
 	}
-
+	var existingEvent Event
 	err := db.First(&existingEvent, &Event{Hash: event.Hash}).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return false, nil
@@ -55,7 +52,7 @@ func checkDuplicate(event *Event, db *gorm.DB, events *[]Event) (bool, error) {
 }
 
 func pruneEvents(db *gorm.DB) error {
-	lastTime := time.Now().AddDate(0, -6, 0).Unix()
+	lastTime := time.Now().AddDate(-5, 0, 0).Unix()
 	result := db.Where("date_time < ?", lastTime).Delete(&Event{})
 	if result.Error != nil {
 		return result.Error
@@ -130,10 +127,10 @@ func main() {
 		Created:     time.Now(),
 	}
 
-	var oldEvents []Event
-	db.Find(&oldEvents)
+	var events []Event
+	db.Find(&events).Limit(250)
 
-	for _, event := range oldEvents {
+	for _, event := range events {
 		translatedEvent, _ := translateEventToItem(&event)
 		feed.Add(translatedEvent)
 	}
@@ -152,12 +149,6 @@ func main() {
 
 	mainCollector.OnError(func(_ *colly.Response, err error) {
 		log.Println("Something went wrong:", err)
-	})
-
-	var events []Event
-
-	mainCollector.OnResponse(func(r *colly.Response) {
-		events = nil
 	})
 
 	mainCollector.OnHTML("ul.list--tablelist > li", func(e *colly.HTMLElement) {
@@ -191,13 +182,10 @@ func main() {
 	mainCollector.OnScraped(func(r *colly.Response) {
 		log.Printf("%s scraped, collected %d events!", r.Request.URL, len(events))
 
-		newEvents := 0
-
 		for _, event := range events {
 			db.Create(&event)
 			translatedEvent, _ := translateEventToItem(&event)
 			feed.Add(translatedEvent)
-			newEvents++
 		}
 
 		if len(events) > 0 {
@@ -206,7 +194,7 @@ func main() {
 			feedAtom, _ = feed.ToAtom()
 		}
 
-		log.Printf("Added %d new events", newEvents)
+		log.Printf("Added %d new events", len(events))
 	})
 
 	// TODO maybe initially scrape all the pages
