@@ -38,8 +38,15 @@ type MetaTag struct {
 	Content string
 }
 
-func checkDuplicate(event *Event, db *gorm.DB) (bool, error) {
+func checkDuplicate(event *Event, db *gorm.DB, events *[]Event) (bool, error) {
 	var existingEvent Event
+
+	eventIdx := slices.IndexFunc(*events, func(e Event) bool { return e.Hash == event.Hash })
+
+	if eventIdx != -1 {
+		return true, nil
+	}
+
 	err := db.First(&existingEvent, &Event{Hash: event.Hash}).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return false, nil
@@ -158,7 +165,7 @@ func main() {
 
 		t, err := time.Parse("02.01.2006 15:04 Uhr", e.ChildText("div.cell.nowrap.date"))
 		if err != nil {
-			log.Fatal("Error parsing date:", err)
+			log.Println("Error parsing date:", err)
 			return
 		}
 		event.DateTime = t.Unix()
@@ -166,12 +173,17 @@ func main() {
 		event.Link = "https://www.berlin.de" + e.ChildAttr("a", "href")
 		event.Location = strings.TrimPrefix(e.ChildText("span.category"), "Ereignisort: ")
 
+		hash := adler32.Checksum([]byte(event.Title + strconv.FormatInt(event.DateTime, 10)))
+		event.Hash = fmt.Sprintf("%x", hash)
+
+		exists, _ := checkDuplicate(&event, db, &events)
+		if exists {
+			return
+		}
+
 		metaTags, _ := extractMetaTags(event.Link)
 		descriptionIdx := slices.IndexFunc(metaTags, func(tag MetaTag) bool { return tag.Name == "description" })
 		event.Description = metaTags[descriptionIdx].Content
-
-		hash := adler32.Checksum([]byte(event.Title + strconv.FormatInt(event.DateTime, 10)))
-		event.Hash = fmt.Sprintf("%x", hash)
 
 		events = append(events, event)
 	})
@@ -179,24 +191,16 @@ func main() {
 	mainCollector.OnScraped(func(r *colly.Response) {
 		log.Printf("%s scraped, collected %d events!", r.Request.URL, len(events))
 
-		cacheNeedsUpdate := false
 		newEvents := 0
 
 		for _, event := range events {
-			exists, _ := checkDuplicate(&event, db)
-			if exists {
-				continue
-			}
 			db.Create(&event)
 			translatedEvent, _ := translateEventToItem(&event)
 			feed.Add(translatedEvent)
 			newEvents++
-			if !cacheNeedsUpdate {
-				cacheNeedsUpdate = true
-			}
 		}
 
-		if cacheNeedsUpdate {
+		if len(events) > 0 {
 			feedRSS, _ = feed.ToRss()
 			feedJSON, _ = feed.ToJSON()
 			feedAtom, _ = feed.ToAtom()
@@ -234,7 +238,7 @@ func main() {
 		w.Header().Set("Content-Type", "application/atom+xml")
 		_, err := io.WriteString(w, feedAtom)
 		if err != nil {
-			log.Printf("Error writing atom: %v", err)
+			log.Println("Error writing atom:", err)
 			return
 		}
 	})
@@ -242,7 +246,7 @@ func main() {
 		w.Header().Set("Content-Type", "application/atom+xml")
 		_, err := io.WriteString(w, feedRSS)
 		if err != nil {
-			log.Printf("Error writing rss: %v", err)
+			log.Println("Error writing rss:", err)
 			return
 		}
 	})
@@ -250,7 +254,7 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		_, err := io.WriteString(w, feedJSON)
 		if err != nil {
-			log.Printf("Error writing json: %v", err)
+			log.Println("Error writing json:", err)
 			return
 		}
 	})
