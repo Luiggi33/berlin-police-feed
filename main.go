@@ -74,7 +74,7 @@ func translateEventToItem(event *Event) (*feeds.Item, error) {
 func extractMetaTags(url string) ([]MetaTag, error) {
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.5615.137 Safari/537.36")
 	res, err := http.DefaultClient.Do(req)
