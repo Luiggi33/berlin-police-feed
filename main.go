@@ -18,6 +18,8 @@ import (
 
 	"github.com/gorilla/feeds"
 
+	"github.com/PuerkitoBio/goquery"
+
 	"github.com/gocolly/colly/v2"
 
 	"gorm.io/driver/sqlite"
