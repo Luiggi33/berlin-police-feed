@@ -25,8 +25,6 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
-
-	"github.com/PuerkitoBio/goquery"
 )
 
 type Event struct {
