@@ -1,26 +1,30 @@
 package main
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
+	"golang.org/x/time/rate"
 	"hash/adler32"
 	"io"
 	"log"
+	"math/rand"
 	"net/http"
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gorilla/feeds"
-
-	"github.com/PuerkitoBio/goquery"
 
 	"github.com/gocolly/colly/v2"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+
+	"github.com/PuerkitoBio/goquery"
 )
 
 type Event struct {
@@ -37,6 +41,41 @@ type MetaTag struct {
 	Name    string
 	Content string
 }
+
+type RateLimitedClient struct {
+	client      *http.Client
+	rateLimiter *rate.Limiter
+	mu          sync.Mutex
+}
+
+func NewRateLimitedClient(requestsPerSecond float64, burst int) *RateLimitedClient {
+	tr := &http.Transport{
+		TLSClientConfig:   &tls.Config{},
+		ForceAttemptHTTP2: false,
+	}
+
+	client := &http.Client{
+		Transport: tr,
+		Timeout:   20 * time.Second, // Increased timeout
+	}
+
+	return &RateLimitedClient{
+		client:      client,
+		rateLimiter: rate.NewLimiter(rate.Limit(requestsPerSecond), burst),
+	}
+}
+
+func (c *RateLimitedClient) Do(req *http.Request) (*http.Response, error) {
+	c.mu.Lock()
+	err := c.rateLimiter.Wait(req.Context())
+	c.mu.Unlock()
+	if err != nil {
+		return nil, err
+	}
+	return c.client.Do(req)
+}
+
+var globalClient = NewRateLimitedClient(0.5, 1)
 
 func checkDuplicate(event *Event, db *gorm.DB, events *[]Event) (bool, error) {
 	eventIdx := slices.IndexFunc(*events, func(e Event) bool { return e.Hash == event.Hash })
@@ -72,31 +111,73 @@ func translateEventToItem(event *Event) (*feeds.Item, error) {
 }
 
 func extractMetaTags(url string) ([]MetaTag, error) {
-	res, err := http.Get(url)
-	if err != nil {
-		return nil, err
-	}
-	defer res.Body.Close()
-	if res.StatusCode != 200 {
-		return nil, errors.New(res.Status)
-	}
-	doc, err := goquery.NewDocumentFromReader(res.Body)
-	if err != nil {
-		return nil, err
-	}
-	var metaTags []MetaTag
-	doc.Find("meta").Each(func(i int, s *goquery.Selection) {
-		metaTag := MetaTag{}
-		if name, exists := s.Attr("name"); exists {
-			metaTag.Name = name
-			metaTag.Content = s.AttrOr("content", "")
-		} else if property, exists := s.Attr("property"); exists {
-			metaTag.Name = property
-			metaTag.Content = s.AttrOr("content", "")
+	maxRetries := 3
+	var lastErr error
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		if attempt > 0 {
+			backoff := time.Duration(1<<uint(attempt)) * time.Second
+			jitter := time.Duration(rand.Float64() * float64(backoff))
+			time.Sleep(backoff + jitter)
 		}
-		metaTags = append(metaTags, metaTag)
-	})
-	return metaTags, nil
+
+		req, err := http.NewRequest("GET", url, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		// Rotate between different user agents to appear more natural
+		userAgents := []string{
+			"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+			"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+			"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0",
+		}
+		req.Header.Set("User-Agent", userAgents[attempt%len(userAgents)])
+		req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+		req.Header.Set("Accept-Language", "en-US,en;q=0.5")
+		req.Header.Set("Connection", "keep-alive")
+
+		res, err := globalClient.client.Do(req)
+		if err != nil {
+			lastErr = err
+			log.Printf("Attempt %d failed: %v\n", attempt+1, err)
+			continue
+		}
+		defer res.Body.Close()
+
+		if res.StatusCode != 200 {
+			lastErr = errors.New(res.Status)
+			log.Printf("Attempt %d failed with status %d\n", attempt+1, res.StatusCode)
+			// 429 (Too Many Requests)
+			if res.StatusCode == 429 {
+				time.Sleep(time.Duration(30+rand.Intn(30)) * time.Second)
+			}
+			continue
+		}
+
+		doc, err := goquery.NewDocumentFromReader(res.Body)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		var metaTags []MetaTag
+		doc.Find("meta").Each(func(i int, s *goquery.Selection) {
+			metaTag := MetaTag{}
+			if name, exists := s.Attr("name"); exists {
+				metaTag.Name = name
+				metaTag.Content = s.AttrOr("content", "")
+			} else if property, exists := s.Attr("property"); exists {
+				metaTag.Name = property
+				metaTag.Content = s.AttrOr("content", "")
+			}
+			metaTags = append(metaTags, metaTag)
+		})
+
+		return metaTags, nil
+	}
+
+	return nil, fmt.Errorf("failed after %d attempts, last error: %v", maxRetries, lastErr)
 }
 
 func main() {
@@ -172,7 +253,11 @@ func main() {
 			return
 		}
 
-		metaTags, _ := extractMetaTags(event.Link)
+		metaTags, err := extractMetaTags(event.Link)
+		if err != nil {
+			log.Println("Error extracting meta tags:", err)
+			return
+		}
 		descriptionIdx := slices.IndexFunc(metaTags, func(tag MetaTag) bool { return tag.Name == "description" })
 		event.Description = metaTags[descriptionIdx].Content
 
@@ -198,7 +283,7 @@ func main() {
 	})
 
 	// TODO maybe initially scrape all the pages
-	err = mainCollector.Visit("https://www.berlin.de/polizei/polizeimeldungen")
+	err = mainCollector.Visit("https://www.berlin.de/polizei/polizeimeldungen/")
 	if err != nil {
 		log.Fatal(err)
 		return
@@ -210,7 +295,7 @@ func main() {
 		for {
 			select {
 			case <-ticker.C:
-				err = mainCollector.Visit("https://www.berlin.de/polizei/polizeimeldungen")
+				err = mainCollector.Visit("https://www.berlin.de/polizei/polizeimeldungen/")
 				if err != nil {
 					log.Fatal(err)
 					return
