@@ -289,7 +289,7 @@ func main() {
 		return
 	}
 
-	ticker := time.NewTicker(1 * time.Hour)
+	ticker := time.NewTicker(12 * time.Hour)
 	quit := make(chan struct{})
 	go func() {
 		for {
