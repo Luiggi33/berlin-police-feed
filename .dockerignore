@@ -4,3 +4,4 @@
 docker-compose.yaml
 *.md
 renovate.json
+sonar-project.properties
