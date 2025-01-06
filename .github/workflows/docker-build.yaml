@@ -1,22 +1,16 @@
-name: Docker Image CI
+name: Build and Release
 
 on:
-  push:
+  workflow_run:
+    workflows: [ "Do SonarQube Analysis" ]
     branches: [ "main" ]
-    paths-ignore:
-      - '.gitignore'
-      - 'renovate.json'
-      - 'README.md'
-  pull_request:
-    branches: [ "main" ]
-    paths-ignore:
-      - '.gitignore'
-      - 'renovate.json'
-      - 'README.md'
+    types:
+      - completed
 
 jobs:
-  build:
+  build-n-release:
     runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
     permissions:
       packages: write
     concurrency:
@@ -24,22 +18,6 @@ jobs:
       group: ${{ github.repository }}-${{ github.event_name }}-builder
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: SonarQube Server Scan
-        uses: sonarsource/sonarqube-scan-action@master
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-
-      # - name: SonarQube Server Quality Gate check
-      #   id: sonarqube-quality-gate-check
-      #   uses: sonarsource/sonarqube-quality-gate-action@master
-      #   with:
-      #     pollingTimeoutSec: 600
-      #   env:
-      #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
