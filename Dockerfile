@@ -26,6 +26,6 @@ COPY --from=build-stage /app/entrypoint /entrypoint
 RUN mkdir /data && chown nobody:nogroup /data
 EXPOSE 8080
 USER nobody:nogroup
-ENV POLICE_URL "https://www.berlin.de/polizei/polizeimeldungen/"
-ENV WEB_PORT 8080
+ENV POLICE_URL="https://www.berlin.de/polizei/polizeimeldungen/"
+ENV WEB_PORT=8080
 ENTRYPOINT ["/entrypoint"]
