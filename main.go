@@ -232,6 +232,8 @@ func main() {
 		log.Println("Something went wrong:", err)
 	})
 
+	var newEvents []Event
+
 	mainCollector.OnHTML("ul.list--tablelist > li", func(e *colly.HTMLElement) {
 		event := Event{}
 
@@ -261,25 +263,32 @@ func main() {
 		descriptionIdx := slices.IndexFunc(metaTags, func(tag MetaTag) bool { return tag.Name == "description" })
 		event.Description = metaTags[descriptionIdx].Content
 
-		events = append(events, event)
+		newEvents = append(newEvents, event)
 	})
 
 	mainCollector.OnScraped(func(r *colly.Response) {
-		log.Printf("%s scraped, collected %d events!", r.Request.URL, len(events))
+		log.Printf("%s scraped, collected %d new events!", r.Request.URL, len(newEvents))
 
-		for _, event := range events {
-			db.Create(&event)
+		for _, event := range newEvents {
+			err := db.Create(&event).Error
+			if err != nil {
+				log.Println("Error creating event:", err)
+				continue
+			}
 			translatedEvent, _ := translateEventToItem(&event)
 			feed.Add(translatedEvent)
+			events = append(events, event)
 		}
 
-		if len(events) > 0 {
+		if len(newEvents) > 0 {
 			feedRSS, _ = feed.ToRss()
 			feedJSON, _ = feed.ToJSON()
 			feedAtom, _ = feed.ToAtom()
+
+			log.Printf("Added %d new events to feed", len(newEvents))
 		}
 
-		log.Printf("Added %d new events", len(events))
+		newEvents = nil
 	})
 
 	// TODO maybe initially scrape all the pages
