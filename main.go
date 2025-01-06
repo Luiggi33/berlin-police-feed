@@ -10,6 +10,7 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -183,6 +184,13 @@ func extractMetaTags(url string) ([]MetaTag, error) {
 func main() {
 	log.Println("Initializing police scraper...")
 
+	policeURL, exists := os.LookupEnv("POLICE_URL")
+
+	if !exists {
+		policeURL = "https://www.berlin.de/polizei/polizeimeldungen/"
+		log.Println("POLICE_URL environment variable not set, defaulting")
+	}
+
 	db, err := gorm.Open(sqlite.Open("/data/policeEvents.db"), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
 	})
@@ -202,7 +210,7 @@ func main() {
 
 	feed := &feeds.Feed{
 		Title:       "Berliner Polizeimeldungen",
-		Link:        &feeds.Link{Href: "https://www.berlin.de/polizei/polizeimeldungen/"},
+		Link:        &feeds.Link{Href: policeURL},
 		Description: "Ein RSS Feed für Berliner Polizeimeldungen",
 		Author:      &feeds.Author{Name: "Aron", Email: "github@luiggi33.de"},
 		Created:     time.Now(),
@@ -292,7 +300,7 @@ func main() {
 	})
 
 	// TODO maybe initially scrape all the pages
-	err = mainCollector.Visit("https://www.berlin.de/polizei/polizeimeldungen/")
+	err = mainCollector.Visit(policeURL)
 	if err != nil {
 		log.Fatal(err)
 		return
@@ -304,7 +312,7 @@ func main() {
 		for {
 			select {
 			case <-ticker.C:
-				err = mainCollector.Visit("https://www.berlin.de/polizei/polizeimeldungen/")
+				err = mainCollector.Visit(policeURL)
 				if err != nil {
 					log.Fatal(err)
 					return
