@@ -15,7 +15,7 @@ on:
       - 'README.md'
 
 jobs:
-  build:
+  run-analysis:
     runs-on: ubuntu-latest
     permissions:
       packages: write
