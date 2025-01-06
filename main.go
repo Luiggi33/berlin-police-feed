@@ -352,8 +352,14 @@ func main() {
 		http.Redirect(w, r, "/rss", http.StatusSeeOther)
 	})
 
-	// TODO make env var for port?
-	err = http.ListenAndServe("0.0.0.0:8080", nil)
+	webPort, exists := os.LookupEnv("WEB_PORT")
+
+	if !exists {
+		webPort = "8080"
+		log.Printf("WEB_PORT not set, defaulting to port %s", webPort)
+	}
+
+	err = http.ListenAndServe("0.0.0.0:"+webPort, nil)
 	if errors.Is(err, http.ErrServerClosed) {
 		log.Println("Shutting down...")
 	} else if err != nil {
