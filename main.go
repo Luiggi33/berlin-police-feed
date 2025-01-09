@@ -101,6 +101,7 @@ func pruneEvents(db *gorm.DB) error {
 
 func translateEventToItem(event *Event) (*feeds.Item, error) {
 	feederItem := feeds.Item{
+		Id:          event.Hash,
 		Title:       event.Title,
 		Link:        &feeds.Link{Href: event.Link},
 		Description: event.Description + "\n\nBezirk: " + event.Location,
