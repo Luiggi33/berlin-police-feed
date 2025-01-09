@@ -1,22 +1,16 @@
-name: Docker Image CI
+name: Build and Release
 
 on:
-  push:
+  workflow_run:
+    workflows: [ "Do SonarQube Analysis" ]
     branches: [ "main" ]
-    paths-ignore:
-      - '.gitignore'
-      - 'renovate.json'
-      - 'README.md'
-  pull_request:
-    branches: [ "main" ]
-    paths-ignore:
-      - '.gitignore'
-      - 'renovate.json'
-      - 'README.md'
+    types:
+      - completed
 
 jobs:
-  build:
+  build-n-release:
     runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
     permissions:
       packages: write
     concurrency:

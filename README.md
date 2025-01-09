@@ -32,7 +32,7 @@ Ein Programm, das Polizeimeldungen von der Website der Berliner Polizei scrapt u
     - RSS-Feed
     - Atom-Feed
     - JSON-Format
-- Automatisches Pruning von Einträgen, die älter als 6 Monate sind.
+- Automatisches Pruning von Einträgen, wenn diese älter als mehrere Jahre sind
 
 ## TODOs
 

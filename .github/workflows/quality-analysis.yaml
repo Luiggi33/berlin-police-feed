@@ -1,0 +1,42 @@
+name: Do SonarQube Analysis
+
+on:
+  push:
+    branches: [ "main" ]
+    paths-ignore:
+      - '.gitignore'
+      - 'renovate.json'
+      - 'README.md'
+  pull_request:
+    branches: [ "main" ]
+    paths-ignore:
+      - '.gitignore'
+      - 'renovate.json'
+      - 'README.md'
+
+jobs:
+  run-analysis:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    concurrency:
+      cancel-in-progress: true
+      group: ${{ github.repository }}-${{ github.event_name }}-sonarqube
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: SonarQube Server Scan
+        uses: sonarsource/sonarqube-scan-action@master
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+      # - name: SonarQube Server Quality Gate check
+      #   id: sonarqube-quality-gate-check
+      #   uses: sonarsource/sonarqube-quality-gate-action@master
+      #   with:
+      #     pollingTimeoutSec: 600
+      #   env:
+      #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

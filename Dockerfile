@@ -8,7 +8,7 @@ RUN go mod download
 FROM golang:1.23.4 AS build-stage
 WORKDIR /app
 COPY --from=fetch-stage /app/go.mod /app/go.sum ./
-COPY . .
+COPY main.go .
 RUN CGO_ENABLED=1 GOOS=linux go build -buildvcs=false -o /app/entrypoint
 
 # Test
@@ -26,4 +26,6 @@ COPY --from=build-stage /app/entrypoint /entrypoint
 RUN mkdir /data && chown nobody:nogroup /data
 EXPOSE 8080
 USER nobody:nogroup
+ENV POLICE_URL="https://www.berlin.de/polizei/polizeimeldungen/"
+ENV WEB_PORT=8080
 ENTRYPOINT ["/entrypoint"]

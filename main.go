@@ -10,6 +10,7 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -184,6 +185,13 @@ func extractMetaTags(url string) ([]MetaTag, error) {
 func main() {
 	log.Println("Initializing police scraper...")
 
+	policeURL, exists := os.LookupEnv("POLICE_URL")
+
+	if !exists {
+		policeURL = "https://www.berlin.de/polizei/polizeimeldungen/"
+		log.Println("POLICE_URL environment variable not set, defaulting")
+	}
+
 	db, err := gorm.Open(sqlite.Open("/data/policeEvents.db"), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
 	})
@@ -203,7 +211,7 @@ func main() {
 
 	feed := &feeds.Feed{
 		Title:       "Berliner Polizeimeldungen",
-		Link:        &feeds.Link{Href: "https://www.berlin.de/polizei/polizeimeldungen/"},
+		Link:        &feeds.Link{Href: policeURL},
 		Description: "Ein RSS Feed für Berliner Polizeimeldungen",
 		Author:      &feeds.Author{Name: "Aron", Email: "github@luiggi33.de"},
 		Created:     time.Now(),
@@ -232,6 +240,8 @@ func main() {
 	mainCollector.OnError(func(_ *colly.Response, err error) {
 		log.Println("Something went wrong:", err)
 	})
+
+	var newEvents []Event
 
 	mainCollector.OnHTML("ul.list--tablelist > li", func(e *colly.HTMLElement) {
 		event := Event{}
@@ -262,41 +272,48 @@ func main() {
 		descriptionIdx := slices.IndexFunc(metaTags, func(tag MetaTag) bool { return tag.Name == "description" })
 		event.Description = metaTags[descriptionIdx].Content
 
-		events = append(events, event)
+		newEvents = append(newEvents, event)
 	})
 
 	mainCollector.OnScraped(func(r *colly.Response) {
-		log.Printf("%s scraped, collected %d events!", r.Request.URL, len(events))
+		log.Printf("%s scraped, collected %d new events!", r.Request.URL, len(newEvents))
 
-		for _, event := range events {
-			db.Create(&event)
+		for _, event := range newEvents {
+			err := db.Create(&event).Error
+			if err != nil {
+				log.Println("Error creating event:", err)
+				continue
+			}
 			translatedEvent, _ := translateEventToItem(&event)
 			feed.Add(translatedEvent)
+			events = append(events, event)
 		}
 
-		if len(events) > 0 {
+		if len(newEvents) > 0 {
 			feedRSS, _ = feed.ToRss()
 			feedJSON, _ = feed.ToJSON()
 			feedAtom, _ = feed.ToAtom()
+
+			log.Printf("Added %d new events to feed", len(newEvents))
 		}
 
-		log.Printf("Added %d new events", len(events))
+		newEvents = nil
 	})
 
 	// TODO maybe initially scrape all the pages
-	err = mainCollector.Visit("https://www.berlin.de/polizei/polizeimeldungen/")
+	err = mainCollector.Visit(policeURL)
 	if err != nil {
 		log.Fatal(err)
 		return
 	}
 
-	ticker := time.NewTicker(12 * time.Hour)
+	ticker := time.NewTicker(1 * time.Hour)
 	quit := make(chan struct{})
 	go func() {
 		for {
 			select {
 			case <-ticker.C:
-				err = mainCollector.Visit("https://www.berlin.de/polizei/polizeimeldungen/")
+				err = mainCollector.Visit(policeURL)
 				if err != nil {
 					log.Fatal(err)
 					return
@@ -336,8 +353,14 @@ func main() {
 		http.Redirect(w, r, "/rss", http.StatusSeeOther)
 	})
 
-	// TODO make env var for port?
-	err = http.ListenAndServe("0.0.0.0:8080", nil)
+	webPort, exists := os.LookupEnv("WEB_PORT")
+
+	if !exists {
+		webPort = "8080"
+		log.Printf("WEB_PORT not set, defaulting to port %s", webPort)
+	}
+
+	err = http.ListenAndServe("0.0.0.0:"+webPort, nil)
 	if errors.Is(err, http.ErrServerClosed) {
 		log.Println("Shutting down...")
 	} else if err != nil {
