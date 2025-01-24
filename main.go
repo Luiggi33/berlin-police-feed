@@ -1,4 +1,4 @@
-package main
+Rpackage main
 
 import (
 	"crypto/tls"
@@ -254,6 +254,7 @@ func main() {
 		event.Title = e.ChildText("a")
 		event.Link = "https://www.berlin.de" + e.ChildAttr("a", "href")
 		event.Location = strings.TrimPrefix(e.ChildText("span.category"), "Ereignisort: ")
+		event.Description = "Keine Beschreibung gefunden"
 
 		hash := adler32.Checksum([]byte(event.Title + strconv.FormatInt(event.DateTime, 10)))
 		event.Hash = fmt.Sprintf("%x", hash)
@@ -268,9 +269,11 @@ func main() {
 			log.Println("Error extracting meta tags:", err)
 			return
 		}
-		fmt.Printf("%+v\n", metaTags)
+
 		descriptionIdx := slices.IndexFunc(metaTags, func(tag MetaTag) bool { return tag.Name == "description" })
-		event.Description = metaTags[descriptionIdx].Content
+		if descriptionIdx != -1 {
+			event.Description = metaTags[descriptionIdx].Content
+		}
 
 		newEvents = append(newEvents, event)
 	})
