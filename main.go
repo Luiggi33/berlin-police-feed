@@ -268,6 +268,7 @@ func main() {
 			log.Println("Error extracting meta tags:", err)
 			return
 		}
+		fmt.Printf("%+v\n", metaTags)
 		descriptionIdx := slices.IndexFunc(metaTags, func(tag MetaTag) bool { return tag.Name == "description" })
 		event.Description = metaTags[descriptionIdx].Content
 
