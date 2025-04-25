@@ -3,14 +3,15 @@ module policeScraper
 go 1.23.0
 
 require (
+	github.com/PuerkitoBio/goquery v1.10.1
 	github.com/gocolly/colly/v2 v2.1.0
 	github.com/gorilla/feeds v1.2.0
+	golang.org/x/time v0.9.0
 	gorm.io/driver/sqlite v1.5.7
-	gorm.io/gorm v1.25.12
+	gorm.io/gorm v1.26.0
 )
 
 require (
-	github.com/PuerkitoBio/goquery v1.10.1 // indirect
 	github.com/andybalholm/cascadia v1.3.3 // indirect
 	github.com/antchfx/htmlquery v1.3.4 // indirect
 	github.com/antchfx/xmlquery v1.4.3 // indirect
@@ -26,7 +27,6 @@ require (
 	github.com/temoto/robotstxt v1.1.2 // indirect
 	golang.org/x/net v0.33.0 // indirect
 	golang.org/x/text v0.21.0 // indirect
-	golang.org/x/time v0.9.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
 	google.golang.org/protobuf v1.36.1 // indirect
 )
