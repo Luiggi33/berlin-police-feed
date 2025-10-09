@@ -6,7 +6,7 @@ require (
 	github.com/PuerkitoBio/goquery v1.10.3
 	github.com/gocolly/colly/v2 v2.2.0
 	github.com/gorilla/feeds v1.2.0
-	golang.org/x/time v0.11.0
+	golang.org/x/time v0.14.0
 	gorm.io/driver/sqlite v1.6.0
 	gorm.io/gorm v1.31.0
 )
