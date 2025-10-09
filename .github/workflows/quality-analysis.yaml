@@ -23,7 +23,7 @@ jobs:
       cancel-in-progress: true
       group: ${{ github.repository }}-${{ github.event_name }}-sonarqube
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
