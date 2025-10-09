@@ -5,7 +5,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 # Build
-FROM golang:1.23.6 AS build-stage
+FROM golang:1.25.2 AS build-stage
 WORKDIR /app
 COPY --from=fetch-stage /app/go.mod /app/go.sum ./
 COPY main.go .
