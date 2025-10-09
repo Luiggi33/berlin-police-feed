@@ -1,23 +1,45 @@
-name: Build and Release
+name: Quality Analysis and Build
 
 on:
-  workflow_run:
-    workflows: [ "Do SonarQube Analysis" ]
-    branches:
-      - main
-      - dev
-      - renovate/*
-    types:
-      - completed
+  push:
+    branches: [ "main" ]
+    paths-ignore:
+      - '.gitignore'
+      - 'renovate.json'
+      - 'README.md'
+  pull_request:
+    branches: [ "main" ]
+    paths-ignore:
+      - '.gitignore'
+      - 'renovate.json'
+      - 'README.md'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  build-n-release:
+  run-analysis:
     runs-on: ubuntu-latest
-    if: github.event.workflow_run.conclusion == 'success'
     permissions:
       packages: write
-    concurrency:
-      group: ${{ github.repository }}-${{ github.event_name }}-builder
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: SonarQube Server Scan
+        uses: sonarsource/sonarqube-scan-action@master
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+  build-n-release:
+    runs-on: ubuntu-latest
+    needs: run-analysis
+    if: needs.run-analysis.result == 'success'
+    permissions:
+      packages: write
     steps:
       - uses: actions/checkout@v5
 
