@@ -3,7 +3,10 @@ name: Build and Release
 on:
   workflow_run:
     workflows: [ "Do SonarQube Analysis" ]
-    branches: [ "main" ]
+    branches:
+      - main
+      - dev
+      - renovate/*
     types:
       - completed
 
