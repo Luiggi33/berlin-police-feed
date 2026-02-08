@@ -3,7 +3,7 @@ module policeScraper
 go 1.25.0
 
 require (
-	github.com/PuerkitoBio/goquery v1.10.3
+	github.com/PuerkitoBio/goquery v1.11.0
 	github.com/gocolly/colly/v2 v2.2.0
 	github.com/gorilla/feeds v1.2.0
 	golang.org/x/time v0.14.0
@@ -27,8 +27,8 @@ require (
 	github.com/nlnwa/whatwg-url v0.6.1 // indirect
 	github.com/saintfish/chardet v0.0.0-20230101081208-5e3ef4b5456d // indirect
 	github.com/temoto/robotstxt v1.1.2 // indirect
-	golang.org/x/net v0.39.0 // indirect
-	golang.org/x/text v0.24.0 // indirect
+	golang.org/x/net v0.47.0 // indirect
+	golang.org/x/text v0.31.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
 	google.golang.org/protobuf v1.36.6 // indirect
 )
